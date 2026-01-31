@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState(null)
-  const [recentContacts, setRecentContacts] = useState([])
+  const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,20 +20,14 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setStats(data.stats || data)
-        setRecentContacts(data.recentContacts || [])
+        setDashboardData(data)
       } else if (response.status === 401) {
-        // Token expired or invalid, redirect to login
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
         window.location.href = '/admin/login'
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Dashboard error:', errorData.message || 'Failed to load dashboard')
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
-      // Don't show error to user, just log it
     } finally {
       setLoading(false)
     }
@@ -48,10 +41,18 @@ export default function AdminDashboard() {
     )
   }
 
+  const stats = dashboardData?.stats || {}
+  const recentContacts = dashboardData?.recentContacts || []
+
   const statCards = [
-    { label: 'Total Contacts', value: stats?.totalContacts || 0, color: 'bg-blue-500' },
-    { label: 'Total Programs', value: stats?.totalPrograms || 0, color: 'bg-green-500' },
-    { label: 'Total Testimonials', value: stats?.totalTestimonials || 0, color: 'bg-purple-500' },
+    { label: 'Total Messages', value: stats.total_messages || 0, unread: stats.unread_messages || 0, color: 'bg-blue-500' },
+    { label: 'Published Posts', value: stats.published_posts || 0, total: stats.total_posts || 0, color: 'bg-green-500' },
+    { label: 'Total Events', value: stats.total_events || 0, color: 'bg-purple-500' },
+    { label: 'Active Programs', value: stats.active_programs || 0, total: stats.total_programs || 0, color: 'bg-orange-500' },
+    { label: 'Testimonials', value: stats.total_testimonials || 0, color: 'bg-pink-500' },
+    { label: 'Impact Stats', value: stats.total_stats || 0, color: 'bg-indigo-500' },
+    { label: 'Active Leaders', value: stats.active_leaders || 0, color: 'bg-red-500' },
+    { label: 'Active Members', value: stats.active_members || 0, color: 'bg-teal-500' },
   ]
 
   return (
@@ -59,13 +60,19 @@ export default function AdminDashboard() {
       <h1 className="text-3xl font-heading font-bold text-white mb-8">Dashboard</h1>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {statCards.map((stat) => (
           <div key={stat.label} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm mb-1">{stat.label}</p>
                 <p className="text-3xl font-bold text-primary">{stat.value}</p>
+                {stat.unread > 0 && (
+                  <p className="text-sm text-red-600 font-semibold">{stat.unread} unread</p>
+                )}
+                {stat.total && stat.total !== stat.value && (
+                  <p className="text-sm text-gray-500">of {stat.total} total</p>
+                )}
               </div>
               <div className={`${stat.color} w-12 h-12 rounded-full flex items-center justify-center text-white text-2xl`}>
                 📊
@@ -77,7 +84,7 @@ export default function AdminDashboard() {
 
       {/* Recent Contacts */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 overflow-hidden">
-        <h2 className="text-xl font-heading font-semibold text-primary mb-4">Recent Contact Submissions</h2>
+        <h2 className="text-xl font-heading font-semibold text-primary mb-4">Recent Contact Messages</h2>
         {recentContacts.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">

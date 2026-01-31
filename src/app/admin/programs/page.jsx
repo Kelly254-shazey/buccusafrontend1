@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
+import { Dialog, ConfirmDialog } from '@/components/admin/Dialog'
 
 export default function AdminPrograms() {
   const [programs, setPrograms] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingProgram, setEditingProgram] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [programToDelete, setProgramToDelete] = useState(null)
+  const [message, setMessage] = useState('')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -33,13 +37,10 @@ export default function AdminPrograms() {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
         window.location.href = '/admin/login'
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Error fetching programs:', errorData.message || 'Failed to load programs')
       }
     } catch (error) {
       console.error('Error fetching programs:', error)
-      setPrograms([]) // Set empty array on error
+      setPrograms([])
     } finally {
       setLoading(false)
     }
@@ -60,17 +61,17 @@ export default function AdminPrograms() {
       })
 
       if (response.ok) {
+        setMessage(editingProgram ? 'Program updated successfully!' : 'Program created successfully!')
         fetchPrograms()
         setShowForm(false)
         setEditingProgram(null)
         setFormData({ title: '', description: '', icon: 'users', image: '' })
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error saving program:', error)
+      setMessage('Error saving program')
+      setTimeout(() => setMessage(''), 3000)
     }
   }
 
@@ -85,30 +86,34 @@ export default function AdminPrograms() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this program?')) return
+  const handleDeleteClick = (program) => {
+    setProgramToDelete(program)
+    setShowDeleteConfirm(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/admin/programs/${id}`, {
+      const response = await fetch(`${apiUrl}/api/admin/programs/${programToDelete.id}`, {
         method: 'DELETE',
         headers: getApiHeaders(),
       })
 
       if (response.ok) {
+        setMessage('Program deleted successfully!')
         fetchPrograms()
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error deleting program:', error)
+      setMessage('Error deleting program')
+      setTimeout(() => setMessage(''), 3000)
     }
+    setProgramToDelete(null)
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8 text-white">Loading...</div>
   }
 
   return (
@@ -127,63 +132,9 @@ export default function AdminPrograms() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            {editingProgram ? 'Edit Program' : 'Add New Program'}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                required
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
-              <select
-                value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              >
-                <option value="users">Users</option>
-                <option value="crown">Crown</option>
-                <option value="heart">Heart</option>
-                <option value="shield">Shield</option>
-                <option value="leaf">Leaf</option>
-                <option value="trophy">Trophy</option>
-              </select>
-            </div>
-            <div className="flex space-x-4">
-              <button type="submit" className="btn-primary">
-                {editingProgram ? 'Update' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false)
-                  setEditingProgram(null)
-                }}
-                className="btn-outline"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+      {message && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {message}
         </div>
       )}
 
@@ -200,7 +151,7 @@ export default function AdminPrograms() {
                 Edit
               </button>
               <button
-                onClick={() => handleDelete(program.id)}
+                onClick={() => handleDeleteClick(program)}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600"
               >
                 Delete
@@ -209,6 +160,77 @@ export default function AdminPrograms() {
           </div>
         ))}
       </div>
+
+      <Dialog
+        isOpen={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingProgram(null)
+        }}
+        title={editingProgram ? 'Edit Program' : 'Add New Program'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              required
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
+            <select
+              value={formData.icon}
+              onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            >
+              <option value="users">Users</option>
+              <option value="crown">Crown</option>
+              <option value="heart">Heart</option>
+              <option value="shield">Shield</option>
+              <option value="leaf">Leaf</option>
+              <option value="trophy">Trophy</option>
+            </select>
+          </div>
+          <div className="flex space-x-4">
+            <button type="submit" className="btn-primary">
+              {editingProgram ? 'Update' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false)
+                setEditingProgram(null)
+              }}
+              className="btn-outline"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Program"
+        message={`Are you sure you want to delete "${programToDelete?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   )
 }

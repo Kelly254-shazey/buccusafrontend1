@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
+import { Dialog, ConfirmDialog } from '@/components/admin/Dialog'
 
 export default function AdminTestimonials() {
   const [testimonials, setTestimonials] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingTestimonial, setEditingTestimonial] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [testimonialToDelete, setTestimonialToDelete] = useState(null)
+  const [message, setMessage] = useState('')
   const [formData, setFormData] = useState({
     name: '',
     role: '',
@@ -22,7 +26,9 @@ export default function AdminTestimonials() {
   const fetchTestimonials = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/testimonials`)
+      const response = await fetch(`${apiUrl}/api/admin/testimonials`, {
+        headers: getApiHeaders(),
+      })
 
       if (response.ok) {
         const data = await response.json()
@@ -31,13 +37,10 @@ export default function AdminTestimonials() {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
         window.location.href = '/admin/login'
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Error fetching testimonials:', errorData.message || 'Failed to load testimonials')
       }
     } catch (error) {
       console.error('Error fetching testimonials:', error)
-      setTestimonials([]) // Set empty array on error
+      setTestimonials([])
     } finally {
       setLoading(false)
     }
@@ -54,26 +57,30 @@ export default function AdminTestimonials() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this testimonial?')) return
+  const handleDeleteClick = (testimonial) => {
+    setTestimonialToDelete(testimonial)
+    setShowDeleteConfirm(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/admin/testimonials/${id}`, {
+      const response = await fetch(`${apiUrl}/api/admin/testimonials/${testimonialToDelete.id}`, {
         method: 'DELETE',
         headers: getApiHeaders(),
       })
 
       if (response.ok) {
+        setMessage('Testimonial deleted successfully!')
         fetchTestimonials()
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error deleting testimonial:', error)
+      setMessage('Error deleting testimonial')
+      setTimeout(() => setMessage(''), 3000)
     }
+    setTestimonialToDelete(null)
   }
 
   const handleSubmit = async (e) => {
@@ -91,22 +98,22 @@ export default function AdminTestimonials() {
       })
 
       if (response.ok) {
+        setMessage(editingTestimonial ? 'Testimonial updated successfully!' : 'Testimonial created successfully!')
         fetchTestimonials()
         setShowForm(false)
         setEditingTestimonial(null)
         setFormData({ name: '', role: '', content: '', image: '' })
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error saving testimonial:', error)
+      setMessage('Error saving testimonial')
+      setTimeout(() => setMessage(''), 3000)
     }
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8 text-white">Loading...</div>
   }
 
   return (
@@ -125,59 +132,9 @@ export default function AdminTestimonials() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            {editingTestimonial ? 'Edit Testimonial' : 'Add New Testimonial'}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-              <input
-                type="text"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
-              <textarea
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                required
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div className="flex space-x-4">
-              <button type="submit" className="btn-primary">
-                {editingTestimonial ? 'Update' : 'Create'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false)
-                  setEditingTestimonial(null)
-                  setFormData({ name: '', role: '', content: '', image: '' })
-                }}
-                className="btn-outline"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+      {message && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {message}
         </div>
       )}
 
@@ -195,7 +152,7 @@ export default function AdminTestimonials() {
                 Edit
               </button>
               <button
-                onClick={() => handleDelete(testimonial.id)}
+                onClick={() => handleDeleteClick(testimonial)}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600"
               >
                 Delete
@@ -204,6 +161,72 @@ export default function AdminTestimonials() {
           </div>
         ))}
       </div>
+
+      <Dialog
+        isOpen={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingTestimonial(null)
+        }}
+        title={editingTestimonial ? 'Edit Testimonial' : 'Add New Testimonial'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+            <input
+              type="text"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+            <textarea
+              value={formData.content}
+              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              required
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="flex space-x-4">
+            <button type="submit" className="btn-primary">
+              {editingTestimonial ? 'Update' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false)
+                setEditingTestimonial(null)
+              }}
+              className="btn-outline"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Testimonial"
+        message={`Are you sure you want to delete the testimonial by "${testimonialToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
+import { Dialog, ConfirmDialog } from '@/components/admin/Dialog'
 
 export default function AdminEvents() {
   const [events, setEvents] = useState([])
@@ -21,6 +22,9 @@ export default function AdminEvents() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [eventToDelete, setEventToDelete] = useState(null)
+  const [showForm, setShowForm] = useState(false)
 
   useEffect(() => {
     fetchEvents()
@@ -140,8 +144,11 @@ export default function AdminEvents() {
           image_url: '',
           is_upcoming: true
         })
+        setImagePreview(null)
         setEditingId(null)
+        setShowForm(false)
         fetchEvents()
+        setTimeout(() => setSuccess(''), 3000)
       } else {
         const errorData = await response.json()
         setError(errorData.message || 'Failed to save event')
@@ -165,14 +172,18 @@ export default function AdminEvents() {
     })
     setImagePreview(event.image_url)
     setEditingId(event.id)
+    setShowForm(true)
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this event?')) return
+    setEventToDelete(events.find(e => e.id === id))
+    setShowDeleteConfirm(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/admin/events/${id}`, {
+      const response = await fetch(`${apiUrl}/api/admin/events/${eventToDelete.id}`, {
         method: 'DELETE',
         headers: getApiHeaders(),
       })
@@ -180,13 +191,17 @@ export default function AdminEvents() {
       if (response.ok) {
         setSuccess('Event deleted successfully!')
         fetchEvents()
+        setTimeout(() => setSuccess(''), 3000)
       } else {
         setError('Failed to delete event')
+        setTimeout(() => setError(''), 3000)
       }
     } catch (error) {
       console.error('Error:', error)
       setError('An error occurred while deleting')
+      setTimeout(() => setError(''), 3000)
     }
+    setEventToDelete(null)
   }
 
   const handleCancel = () => {
@@ -200,46 +215,63 @@ export default function AdminEvents() {
     })
     setImagePreview(null)
     setEditingId(null)
+    setShowForm(false)
   }
 
   return (
     <div className="w-full min-h-screen bg-blue-950 space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8">
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {success}
+        </div>
+      )}
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-6 sm:mb-8"
       >
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Manage Events</h1>
-        <p className="text-sm sm:text-base text-gray-300">Create, edit, or remove events and activities</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Manage Events</h1>
+            <p className="text-sm sm:text-base text-gray-300">Create, edit, or remove events and activities</p>
+          </div>
+          <button
+            onClick={() => {
+              setShowForm(true)
+              setEditingId(null)
+              setFormData({
+                title: '',
+                description: '',
+                event_date: '',
+                location: '',
+                image_url: '',
+                is_upcoming: true
+              })
+              setImagePreview(null)
+            }}
+            className="btn-primary"
+          >
+            + Add Event
+          </button>
+        </div>
       </motion.div>
 
       {/* Form Section */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
-        className="bg-white rounded-lg shadow-lg p-4 sm:p-6 md:p-8"
+      <Dialog
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        title={editingId ? 'Edit Event' : 'Create New Event'}
       >
-        <h2 className="text-lg sm:text-xl font-bold text-primary mb-4 sm:mb-6">
-          {editingId ? 'Edit Event' : 'Create New Event'}
-        </h2>
-
-        {error && (
-          <div className="mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm sm:text-base">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="mb-4 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm sm:text-base">
-            {success}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
               <input
                 type="text"
                 name="title"
@@ -288,69 +320,6 @@ export default function AdminEvents() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Event Image</label>
-            <div className="space-y-3">
-              {/* Image Preview */}
-              {imagePreview && (
-                <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden border-2 border-primary">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImagePreview(null)
-                      setFormData(prev => ({ ...prev, image_url: '' }))
-                    }}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Upload Area */}
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-primary rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <svg className="w-8 h-8 text-primary mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-xs sm:text-sm text-gray-500">
-                    <span className="font-semibold">Click to upload</span> or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-400">PNG, JPG, GIF up to 5MB</p>
-                </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/jpeg,image/png,image/gif"
-                  onChange={handleImageUpload}
-                  disabled={uploadingImage}
-                />
-              </label>
-
-              {uploadingImage && (
-                <div className="text-center text-sm text-blue-600">Uploading image...</div>
-              )}
-
-              {/* Fallback URL input */}
-              <div className="text-sm text-gray-500 border-t pt-3">
-                <p className="mb-2">Or paste image URL:</p>
-                <input
-                  type="url"
-                  name="image_url"
-                  value={formData.image_url}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                  placeholder="https://example.com/image.jpg"
-                />
-              </div>
-            </div>
-          </div>
-
           <div className="flex items-center space-x-4">
             <label className="flex items-center space-x-2">
               <input
@@ -372,18 +341,16 @@ export default function AdminEvents() {
             >
               {isSubmitting ? 'Saving...' : editingId ? 'Update Event' : 'Create Event'}
             </button>
-            {editingId && (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="flex-1 px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </form>
-      </motion.div>
+      </Dialog>
 
       {/* Events List */}
       <motion.div
@@ -458,6 +425,15 @@ export default function AdminEvents() {
           </div>
         )}
       </motion.div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Event"
+        message={`Are you sure you want to delete "${eventToDelete?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   )
 }

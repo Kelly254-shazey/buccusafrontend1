@@ -2,11 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
+import { Dialog, ConfirmDialog } from '@/components/admin/Dialog'
 
 export default function AdminStats() {
   const [stats, setStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingStat, setEditingStat] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [statToDelete, setStatToDelete] = useState(null)
+  const [message, setMessage] = useState('')
   const [formData, setFormData] = useState({
     number: '',
     label: '',
@@ -20,7 +25,9 @@ export default function AdminStats() {
   const fetchStats = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/impact-stats`)
+      const response = await fetch(`${apiUrl}/api/admin/impact-stats`, {
+        headers: getApiHeaders(),
+      })
 
       if (response.ok) {
         const data = await response.json()
@@ -29,13 +36,10 @@ export default function AdminStats() {
         localStorage.removeItem('adminToken')
         localStorage.removeItem('adminUser')
         window.location.href = '/admin/login'
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Error fetching stats:', errorData.message || 'Failed to load stats')
       }
     } catch (error) {
       console.error('Error fetching stats:', error)
-      setStats([]) // Set empty array on error
+      setStats([])
     } finally {
       setLoading(false)
     }
@@ -44,59 +48,70 @@ export default function AdminStats() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     const apiUrl = getApiUrl()
-    const url = formData.id
-      ? `${apiUrl}/api/admin/impact-stats/${formData.id}`
+    const url = editingStat
+      ? `${apiUrl}/api/admin/impact-stats/${editingStat.id}`
       : `${apiUrl}/api/admin/impact-stats`
 
     try {
       const response = await fetch(url, {
-        method: formData.id ? 'PUT' : 'POST',
+        method: editingStat ? 'PUT' : 'POST',
         headers: getApiHeaders(),
-        body: JSON.stringify({
-          number: formData.number,
-          label: formData.label,
-          icon: formData.icon
-        }),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
+        setMessage(editingStat ? 'Stat updated successfully!' : 'Stat created successfully!')
         fetchStats()
         setShowForm(false)
+        setEditingStat(null)
         setFormData({ number: '', label: '', icon: 'users' })
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error saving stat:', error)
+      setMessage('Error saving stat')
+      setTimeout(() => setMessage(''), 3000)
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this stat?')) return
+  const handleEdit = (stat) => {
+    setEditingStat(stat)
+    setFormData({
+      number: stat.number,
+      label: stat.label,
+      icon: stat.icon || 'users'
+    })
+    setShowForm(true)
+  }
 
+  const handleDeleteClick = (stat) => {
+    setStatToDelete(stat)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/admin/impact-stats/${id}`, {
+      const response = await fetch(`${apiUrl}/api/admin/impact-stats/${statToDelete.id}`, {
         method: 'DELETE',
         headers: getApiHeaders(),
       })
 
       if (response.ok) {
+        setMessage('Stat deleted successfully!')
         fetchStats()
-      } else if (response.status === 401) {
-        localStorage.removeItem('adminToken')
-        localStorage.removeItem('adminUser')
-        window.location.href = '/admin/login'
+        setTimeout(() => setMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error deleting stat:', error)
+      setMessage('Error deleting stat')
+      setTimeout(() => setMessage(''), 3000)
     }
+    setStatToDelete(null)
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8 text-white">Loading...</div>
   }
 
   return (
@@ -106,6 +121,7 @@ export default function AdminStats() {
         <button
           onClick={() => {
             setShowForm(true)
+            setEditingStat(null)
             setFormData({ number: '', label: '', icon: 'users' })
           }}
           className="btn-primary"
@@ -114,59 +130,9 @@ export default function AdminStats() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Add New Stat</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Number</label>
-              <input
-                type="text"
-                value={formData.number}
-                onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                required
-                placeholder="e.g., 2500+"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Label</label>
-              <input
-                type="text"
-                value={formData.label}
-                onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                required
-                placeholder="e.g., Students Mentored"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
-              <select
-                value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
-              >
-                <option value="users">Users</option>
-                <option value="building">Building</option>
-                <option value="crown">Crown</option>
-                <option value="calendar">Calendar</option>
-              </select>
-            </div>
-            <div className="flex space-x-4">
-              <button type="submit" className="btn-primary">Save</button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false)
-                  setFormData({ number: '', label: '', icon: 'users' })
-                }}
-                className="btn-outline"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+      {message && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {message}
         </div>
       )}
 
@@ -175,15 +141,94 @@ export default function AdminStats() {
           <div key={stat.id} className="bg-white rounded-lg shadow-md p-6 text-center">
             <div className="text-4xl font-bold text-primary mb-2">{stat.number}</div>
             <div className="text-gray-600 mb-4">{stat.label}</div>
-            <button
-              onClick={() => handleDelete(stat.id)}
-              className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
-            >
-              Delete
-            </button>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => handleEdit(stat)}
+                className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDeleteClick(stat)}
+                className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>
+
+      <Dialog
+        isOpen={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditingStat(null)
+        }}
+        title={editingStat ? 'Edit Stat' : 'Add New Stat'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Number</label>
+            <input
+              type="text"
+              value={formData.number}
+              onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+              required
+              placeholder="e.g., 2500+"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Label</label>
+            <input
+              type="text"
+              value={formData.label}
+              onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+              required
+              placeholder="e.g., Students Mentored"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
+            <select
+              value={formData.icon}
+              onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+            >
+              <option value="users">Users</option>
+              <option value="building">Building</option>
+              <option value="crown">Crown</option>
+              <option value="calendar">Calendar</option>
+            </select>
+          </div>
+          <div className="flex space-x-4">
+            <button type="submit" className="btn-primary">
+              {editingStat ? 'Update' : 'Create'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false)
+                setEditingStat(null)
+              }}
+              className="btn-outline"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Statistic"
+        message={`Are you sure you want to delete "${statToDelete?.label}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   )
 }

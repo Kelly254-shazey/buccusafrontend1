@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { getApiHeaders, getApiUrl } from '@/lib/auth'
+import { ConfirmDialog } from '@/components/admin/Dialog'
 
 export default function AdminMessages() {
   const [messages, setMessages] = useState([])
@@ -12,6 +13,8 @@ export default function AdminMessages() {
   const [isReplying, setIsReplying] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [messageToDelete, setMessageToDelete] = useState(null)
 
   useEffect(() => {
     fetchMessages()
@@ -80,28 +83,35 @@ export default function AdminMessages() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this message?')) return
+    setMessageToDelete(messages.find(m => m.id === id))
+    setShowDeleteConfirm(true)
+  }
 
+  const handleDeleteConfirm = async () => {
     try {
       const apiUrl = getApiUrl()
-      const response = await fetch(`${apiUrl}/api/admin/messages/${id}`, {
+      const response = await fetch(`${apiUrl}/api/admin/messages/${messageToDelete.id}`, {
         method: 'DELETE',
         headers: getApiHeaders(),
       })
 
       if (response.ok) {
         setSuccess('Message deleted successfully!')
-        if (selectedMessage?.id === id) {
+        if (selectedMessage?.id === messageToDelete.id) {
           setSelectedMessage(null)
         }
         fetchMessages()
+        setTimeout(() => setSuccess(''), 3000)
       } else {
         setError('Failed to delete message')
+        setTimeout(() => setError(''), 3000)
       }
     } catch (error) {
       console.error('Error:', error)
       setError('An error occurred while deleting')
+      setTimeout(() => setError(''), 3000)
     }
+    setMessageToDelete(null)
   }
 
   const formatDate = (dateString) => {
@@ -274,6 +284,15 @@ export default function AdminMessages() {
           )}
         </motion.div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Message"
+        message={`Are you sure you want to delete the message from "${messageToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   )
 }
